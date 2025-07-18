@@ -15,12 +15,15 @@
  */
 
 // Define interface types
+import type {Model} from "@/api/model-api-service";
+
 export interface Agent {
   id: string
   name: string
   description: string
   availableTools: string[]
-  nextStepPrompt?: string
+  nextStepPrompt?: string,
+  model?: Model | null
 }
 
 export interface Tool {
@@ -62,11 +65,18 @@ export class AgentApiService {
   /**
    * Get all Agent list
    */
-  static async getAllAgents(): Promise<Agent[]> {
+  static async getAllAgents(namespace?:string): Promise<Agent[]> {
     try {
-      const response = await fetch(this.BASE_URL)
+     if(namespace){
+      const response = await fetch(`${this.BASE_URL}/namespace/${namespace}`)
       const result = await this.handleResponse(response)
       return await result.json()
+     }else{
+      const response = await fetch(`${this.BASE_URL}`)
+      const result = await this.handleResponse(response)
+      return await result.json()
+
+     }
     } catch (error) {
       console.error('Failed to get Agent list:', error)
       throw error

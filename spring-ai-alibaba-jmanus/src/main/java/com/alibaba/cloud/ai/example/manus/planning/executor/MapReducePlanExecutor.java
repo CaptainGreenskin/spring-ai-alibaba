@@ -24,7 +24,7 @@ import com.alibaba.cloud.ai.example.manus.agent.BaseAgent;
 import com.alibaba.cloud.ai.example.manus.config.ManusProperties;
 import com.alibaba.cloud.ai.example.manus.dynamic.agent.entity.DynamicAgentEntity;
 import com.alibaba.cloud.ai.example.manus.dynamic.agent.service.AgentService;
-import com.alibaba.cloud.ai.example.manus.llm.LlmService;
+import com.alibaba.cloud.ai.example.manus.llm.ILlmService;
 import com.alibaba.cloud.ai.example.manus.planning.model.vo.ExecutionContext;
 import com.alibaba.cloud.ai.example.manus.planning.model.vo.ExecutionStep;
 import com.alibaba.cloud.ai.example.manus.planning.model.vo.ExecutionPlan;
@@ -90,7 +90,7 @@ public class MapReducePlanExecutor extends AbstractPlanExecutor {
 	private final ExecutorService executorService;
 
 	public MapReducePlanExecutor(List<DynamicAgentEntity> agents, PlanExecutionRecorder recorder,
-			AgentService agentService, LlmService llmService, ManusProperties manusProperties) {
+			AgentService agentService, ILlmService llmService, ManusProperties manusProperties) {
 		super(agents, recorder, agentService, llmService, manusProperties);
 
 		// Get thread pool size from configuration
@@ -119,7 +119,7 @@ public class MapReducePlanExecutor extends AbstractPlanExecutor {
 		plan.updateStepIndices();
 
 		try {
-			recordPlanExecutionStart(context);
+			recorder.recordPlanExecutionStart(context);
 			List<ExecutionNode> steps = mapReducePlan.getSteps();
 
 			if (CollectionUtil.isNotEmpty(steps)) {
@@ -248,7 +248,7 @@ public class MapReducePlanExecutor extends AbstractPlanExecutor {
 		// 记录Reduce阶段完成状态 - 为每个Reduce步骤记录完成状态
 		for (ExecutionStep step : postProcessSteps) {
 			step.setAgent(executor);
-			recordStepEnd(step, context);
+			recorder.recordStepEnd(step, context);
 		}
 		logger.info("Post Process 阶段执行完成");
 		return executor;
@@ -263,7 +263,7 @@ public class MapReducePlanExecutor extends AbstractPlanExecutor {
 
 		// 记录Map阶段开始状态 - 为每个Map步骤记录开始状态
 		for (ExecutionStep step : mapSteps) {
-			recordStepStart(step, context);
+			recorder.recordStepStart(step, context);
 		}
 
 		// 添加空指针检查
@@ -342,7 +342,7 @@ public class MapReducePlanExecutor extends AbstractPlanExecutor {
 		for (ExecutionStep step : mapSteps) {
 			step.setAgent(lastExecutor);
 			step.setResult("已经成功的执行了所有的Map任务");
-			recordStepEnd(step, context);
+			recorder.recordStepEnd(step, context);
 		}
 
 		logger.info("Map 阶段执行完成");
@@ -376,7 +376,7 @@ public class MapReducePlanExecutor extends AbstractPlanExecutor {
 
 		// 记录Reduce阶段开始状态 - 为每个Reduce步骤记录开始状态
 		for (ExecutionStep step : reduceSteps) {
-			recordStepStart(step, context);
+			recorder.recordStepStart(step, context);
 		}
 
 		BaseAgent executor = lastExecutor;
@@ -430,7 +430,7 @@ public class MapReducePlanExecutor extends AbstractPlanExecutor {
 
 		// 记录Reduce阶段完成状态 - 为每个Reduce步骤记录完成状态
 		for (ExecutionStep step : reduceSteps) {
-			recordStepEnd(step, context);
+			recorder.recordStepEnd(step, context);
 		}
 
 		logger.info("Reduce 阶段执行完成，共处理 {} 个批次", batches.size());

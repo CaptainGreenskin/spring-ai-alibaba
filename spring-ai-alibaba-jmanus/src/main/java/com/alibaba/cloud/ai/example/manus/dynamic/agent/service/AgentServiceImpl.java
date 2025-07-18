@@ -21,7 +21,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import com.alibaba.cloud.ai.example.manus.dynamic.mcp.service.McpService;
+import com.alibaba.cloud.ai.example.manus.dynamic.mcp.service.IMcpService;
+import com.alibaba.cloud.ai.example.manus.dynamic.model.entity.DynamicModelEntity;
+import com.alibaba.cloud.ai.example.manus.dynamic.model.model.vo.ModelConfig;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,9 +38,9 @@ import com.alibaba.cloud.ai.example.manus.dynamic.agent.ToolCallbackProvider;
 import com.alibaba.cloud.ai.example.manus.dynamic.agent.entity.DynamicAgentEntity;
 import com.alibaba.cloud.ai.example.manus.dynamic.agent.model.Tool;
 import com.alibaba.cloud.ai.example.manus.dynamic.agent.repository.DynamicAgentRepository;
-import com.alibaba.cloud.ai.example.manus.llm.LlmService;
-import com.alibaba.cloud.ai.example.manus.planning.PlanningFactory;
+import com.alibaba.cloud.ai.example.manus.planning.IPlanningFactory;
 import com.alibaba.cloud.ai.example.manus.planning.PlanningFactory.ToolCallBackContext;
+import com.alibaba.cloud.ai.example.manus.llm.ILlmService;
 
 @Service
 public class AgentServiceImpl implements AgentService {
@@ -51,25 +53,25 @@ public class AgentServiceImpl implements AgentService {
 
 	private static final Logger log = LoggerFactory.getLogger(AgentServiceImpl.class);
 
-	private final DynamicAgentLoader dynamicAgentLoader;
+	private final IDynamicAgentLoader dynamicAgentLoader;
 
 	private final DynamicAgentRepository repository;
 
-	private final PlanningFactory planningFactory;
+	private final IPlanningFactory planningFactory;
 
-	private final McpService mcpService;
+	private final IMcpService mcpService;
 
 	@Autowired
 	@Lazy
-	private LlmService llmService;
+	private ILlmService llmService;
 
 	@Autowired
 	@Lazy
 	private ToolCallingManager toolCallingManager;
 
 	@Autowired
-	public AgentServiceImpl(@Lazy DynamicAgentLoader dynamicAgentLoader, DynamicAgentRepository repository,
-			@Lazy PlanningFactory planningFactory, @Lazy McpService mcpService) {
+	public AgentServiceImpl(@Lazy IDynamicAgentLoader dynamicAgentLoader, DynamicAgentRepository repository,
+			@Lazy IPlanningFactory planningFactory, @Lazy IMcpService mcpService) {
 		this.dynamicAgentLoader = dynamicAgentLoader;
 		this.repository = repository;
 		this.planningFactory = planningFactory;
@@ -79,6 +81,18 @@ public class AgentServiceImpl implements AgentService {
 	@Override
 	public List<AgentConfig> getAllAgents() {
 		return repository.findAll().stream().map(this::mapToAgentConfig).collect(Collectors.toList());
+	}
+
+	@Override
+	public List<AgentConfig> getAllAgentsByNamespace(String namespace) {
+		List<DynamicAgentEntity> entities;
+		if ("default".equalsIgnoreCase(namespace)) {
+			entities = repository.findAll();
+		}
+		else {
+			entities = repository.findAllByNamespace(namespace);
+		}
+		return entities.stream().map(this::mapToAgentConfig).collect(Collectors.toList());
 	}
 
 	@Override
@@ -181,6 +195,8 @@ public class AgentServiceImpl implements AgentService {
 		config.setNextStepPrompt(entity.getNextStepPrompt());
 		config.setAvailableTools(entity.getAvailableToolKeys());
 		config.setClassName(entity.getClassName());
+		DynamicModelEntity model = entity.getModel();
+		config.setModel(model == null ? null : model.mapToModelConfig());
 		return config;
 	}
 
@@ -206,6 +222,13 @@ public class AgentServiceImpl implements AgentService {
 		// 3. Convert to List and set
 		entity.setAvailableToolKeys(new java.util.ArrayList<>(toolSet));
 		entity.setClassName(config.getName());
+		ModelConfig model = config.getModel();
+		if (model != null) {
+			entity.setModel(new DynamicModelEntity(model.getId()));
+		}
+
+		// 4. Set the user-selected namespace
+		entity.setNamespace(config.getNamespace());
 	}
 
 	private DynamicAgentEntity mergePrompts(DynamicAgentEntity entity, String agentName) {
