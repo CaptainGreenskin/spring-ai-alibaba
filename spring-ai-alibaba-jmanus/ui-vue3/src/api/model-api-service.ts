@@ -24,6 +24,8 @@ export interface Model {
     modelDescription: string
     type: string
     isDefault?: boolean
+    temperature?: number
+    topP?: number
 }
 
 export interface Headers {
@@ -117,12 +119,21 @@ export class ModelApiService {
      */
     static async createModel(modelConfig: Omit<Model, 'id'>): Promise<Model> {
         try {
+            // Ensure null values are included in the JSON
+            const requestBody = JSON.stringify(modelConfig, (key, value) => {
+                // For temperature and topP, explicitly include null values
+                if (key === 'temperature' || key === 'topP') {
+                    return value === undefined ? null : value;
+                }
+                return value;
+            });
+
             const response = await fetch(this.BASE_URL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(modelConfig)
+                body: requestBody
             })
             const result = await this.handleResponse(response)
             return await result.json()
@@ -137,12 +148,21 @@ export class ModelApiService {
      */
     static async updateModel(id: string, modelConfig: Model): Promise<Model> {
         try {
+            // Ensure null values are included in the JSON
+            const requestBody = JSON.stringify(modelConfig, (key, value) => {
+                // For temperature and topP, explicitly include null values
+                if (key === 'temperature' || key === 'topP') {
+                    return value === undefined ? null : value;
+                }
+                return value;
+            });
+
             const response = await fetch(`${this.BASE_URL}/${id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(modelConfig)
+                body: requestBody
             })
             if (response.status === 499) {
                 throw new Error('Request rejected, please modify the model configuration in the configuration file')
@@ -340,12 +360,12 @@ export class ModelConfigModel {
     async setDefaultModel(id: string): Promise<void> {
         try {
             await ModelApiService.setDefaultModel(id)
-            
+
             // Update local state: clear other models' default status and set current model as default
             this.models.forEach(model => {
                 model.isDefault = model.id === id
             })
-            
+
             // Update current model if it's the one being set as default
             if (this.currentModel && this.currentModel.id === id) {
                 this.currentModel.isDefault = true

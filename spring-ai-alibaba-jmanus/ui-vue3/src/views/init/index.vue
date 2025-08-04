@@ -52,8 +52,8 @@
               <span class="language-content">
                 <span class="language-flag">🇨🇳</span>
                 <span class="language-text">
-                  <strong>中文</strong>
-                  <small>简体中文</small>
+                  <strong>{{ $t('language.zh') }}</strong>
+                  <small>{{ $t('init.simplifiedChinese') }}</small>
                 </span>
               </span>
             </label>
@@ -75,9 +75,9 @@
         </div>
 
         <div class="form-actions single">
-          <button 
-            type="button" 
-            class="submit-btn" 
+          <button
+            type="button"
+            class="submit-btn"
             :disabled="!selectedLanguage"
             @click="goToNextStep"
           >
@@ -267,6 +267,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { LlmCheckService } from '@/utils/llm-check'
+import { changeLanguageWithAgentReset, LOCAL_STORAGE_LOCALE } from '@/base/i18n'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -302,14 +303,23 @@ const isFormValid = computed(() => {
 })
 
 // Methods
-const goToNextStep = () => {
+const goToNextStep = async () => {
   if (selectedLanguage.value) {
-    // Apply language change
-    locale.value = selectedLanguage.value
-    localStorage.setItem('preferredLanguage', selectedLanguage.value)
-    
-    // Move to next step
-    currentStep.value = 2
+    try {
+      loading.value = true
+
+      // Use changeLanguageWithAgentReset function to switch language and reset agents
+      await changeLanguageWithAgentReset(selectedLanguage.value)
+
+      // Move to next step
+      currentStep.value = 2
+    } catch (err: any) {
+      console.warn('Failed to switch language:', err)
+      // Continue to next step even if language switch fails, don't block user flow
+      currentStep.value = 2
+    } finally {
+      loading.value = false
+    }
   }
 }
 
@@ -431,13 +441,13 @@ const checkInitStatus = async () => {
 }
 
 onMounted(() => {
-  // Check for saved language preference
-  const savedLanguage = localStorage.getItem('preferredLanguage')
+  // Check for saved language preference using the same key as i18n system
+  const savedLanguage = localStorage.getItem(LOCAL_STORAGE_LOCALE)
   if (savedLanguage && (savedLanguage === 'zh' || savedLanguage === 'en')) {
     selectedLanguage.value = savedLanguage
     locale.value = savedLanguage
   }
-  
+
   checkInitStatus()
 })
 </script>

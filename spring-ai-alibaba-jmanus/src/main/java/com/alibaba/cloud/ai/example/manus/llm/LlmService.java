@@ -45,6 +45,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -67,7 +68,7 @@ public class LlmService implements ILlmService, JmanusListener<ModelChangeEvent>
 	private Map<Long, ChatClient> clients = new ConcurrentHashMap<>();
 
 	/*
-	 * 创建自定义chatModel所需
+	 * Required for creating custom chatModel
 	 */
 	@Autowired
 	private ObjectProvider<RestClient.Builder> restClientBuilderProvider;
@@ -124,26 +125,36 @@ public class LlmService implements ILlmService, JmanusListener<ModelChangeEvent>
 	}
 
 	private void initializeChatClientsWithModel(DynamicModelEntity model) {
-		OpenAiChatOptions defaultOptions = OpenAiChatOptions.builder().build();
+		OpenAiChatOptions.Builder optionsBuilder = OpenAiChatOptions.builder();
+
+		if (model.getTemperature() != null) {
+			optionsBuilder.temperature(model.getTemperature());
+		}
+
+		if (model.getTopP() != null) {
+			optionsBuilder.topP(model.getTopP());
+		}
+
+		OpenAiChatOptions defaultOptions = optionsBuilder.build();
 
 		if (this.planningChatClient == null) {
 			this.planningChatClient = buildPlanningChatClient(model, defaultOptions);
 			log.debug("Planning ChatClient init finish");
 		}
 
-		// 初始化agentExecutionClient
+		// Initialize agentExecutionClient
 		if (this.agentExecutionClient == null) {
 			this.agentExecutionClient = buildAgentExecutionClient(model, defaultOptions);
 			log.debug("Agent Execution Client init finish");
 		}
 
-		// 初始化finalizeChatClient
+		// Initialize finalizeChatClient
 		if (this.finalizeChatClient == null) {
 			this.finalizeChatClient = buildFinalizeChatClient(model, defaultOptions);
 			log.debug("Finalize ChatClient init finish");
 		}
 
-		// 确保动态ChatClient也被创建
+		// Ensure dynamic ChatClient is also created
 		buildOrUpdateDynamicChatClient(model);
 	}
 
@@ -197,7 +208,17 @@ public class LlmService implements ILlmService, JmanusListener<ModelChangeEvent>
 		Map<String, String> headers = model.getHeaders();
 		OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(host).apiKey(apiKey).build();
 
-		OpenAiChatOptions chatOptions = OpenAiChatOptions.builder().model(modelName).build();
+		OpenAiChatOptions.Builder chatOptionsBuilder = OpenAiChatOptions.builder().model(modelName);
+
+		if (model.getTemperature() != null) {
+			chatOptionsBuilder.temperature(model.getTemperature());
+		}
+
+		if (model.getTopP() != null) {
+			chatOptionsBuilder.topP(model.getTopP());
+		}
+
+		OpenAiChatOptions chatOptions = chatOptionsBuilder.build();
 		if (headers != null) {
 			chatOptions.setHttpHeaders(headers);
 		}
@@ -233,7 +254,7 @@ public class LlmService implements ILlmService, JmanusListener<ModelChangeEvent>
 	@Override
 	public ChatClient getPlanningChatClient() {
 		if (planningChatClient == null) {
-			// 尝试lazy initialization
+			// Try lazy initialization
 			log.warn("Agent ChatClient not initialized...");
 			tryLazyInitialization();
 
@@ -256,7 +277,7 @@ public class LlmService implements ILlmService, JmanusListener<ModelChangeEvent>
 	@Override
 	public ChatClient getFinalizeChatClient() {
 		if (finalizeChatClient == null) {
-			// 尝试lazy initialization
+			// Try lazy initialization
 			log.warn("Agent ChatClient not initialized...");
 			tryLazyInitialization();
 
@@ -321,10 +342,18 @@ public class LlmService implements ILlmService, JmanusListener<ModelChangeEvent>
 
 	public OpenAiChatModel openAiChatModel(DynamicModelEntity dynamicModelEntity, OpenAiChatOptions defaultOptions) {
 		defaultOptions.setModel(dynamicModelEntity.getModelName());
-		Map<String, String> headers = dynamicModelEntity.getHeaders();
-		if (headers != null) {
-			defaultOptions.setHttpHeaders(headers);
+		if (defaultOptions.getTemperature() == null && dynamicModelEntity.getTemperature() != null) {
+			defaultOptions.setTemperature(dynamicModelEntity.getTemperature());
 		}
+		if (defaultOptions.getTopP() == null && dynamicModelEntity.getTopP() != null) {
+			defaultOptions.setTopP(dynamicModelEntity.getTopP());
+		}
+		Map<String, String> headers = dynamicModelEntity.getHeaders();
+		if (headers == null) {
+			headers = new HashMap<>();
+		}
+		headers.put("User-Agent", "JManus/3.0.2-SNAPSHOT");
+		defaultOptions.setHttpHeaders(headers);
 		var openAiApi = openAiApi(restClientBuilderProvider.getIfAvailable(RestClient::builder),
 				webClientBuilderProvider.getIfAvailable(WebClient::builder), dynamicModelEntity);
 		OpenAiChatOptions options = OpenAiChatOptions.fromOptions(defaultOptions);
